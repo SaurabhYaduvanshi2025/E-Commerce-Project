@@ -7,6 +7,8 @@ import EmployeeModel from './models/Employee.js';
 import multer from 'multer';
 import cookieParser from 'cookie-parser';
 import jwt from 'jsonwebtoken';
+import Employee from './models/Employee.js';
+
 
 const app = express();
 app.use(express.json());
@@ -49,7 +51,7 @@ const verifyUser = (req, res, next) => {
             if(err) {
                 return res.json("The token is wrong");
             } else {
-                
+                req.user = decoded;
                 next();
             }
         });
@@ -104,8 +106,109 @@ app.post("/login", (req, res) => {
         }
     })
 });
+        //   user cart Data
+ app.get('/api/cart',verifyUser,async(req,res)=>{
+    try{
+        const employee = await Employee.findById(req.user.id).populate('cart.productsId');
+        if(!employee){
+            return res.status(400).json({msg:"Employee nahi Mil raha hai "});
+        }
+        res.json(employee.cart)
+    }catch(err){
+         console.error(err.message);
+         res.status(500).send('server error')
+    }
+ });
+  
+   //  Add Item to Cart (Safe & Crash-Proof)
+app.post('/api/cart/add', verifyUser, async (req, res) => {
+    try {
+        const { productId, quantity } = req.body; 
+        const userId = req.user.id; //(store logic in this box (userId))
 
-//  Products Routes
+        const employee = await EmployeeModel.findById(userId);
+
+        if (!employee) {
+            return res.status(404).json({ msg: "User not found" });
+        }
+
+        const existingItemIndex = employee.cart.findIndex(item => 
+            item.productsId && item.productsId.toString() === productId
+        );
+
+        if (existingItemIndex > -1) {
+            employee.cart[existingItemIndex].quantity += 1;
+        } else {
+            employee.cart.push({ productsId: productId, quantity: 1 });
+        }
+
+        await employee.save();
+        res.json({ msg: "Item Added", cart: employee.cart });
+
+    } catch (err) {
+        console.error("Error adding to cart:", err);
+        res.status(500).send("Server Error");
+    }
+});
+  //  Remove Item from Cart Route 
+app.delete('/api/cart/:id', verifyUser, async (req, res) => {
+    try {
+        const productId = req.params.id; // URL se product ID milegi
+        const userId = req.user.id;
+
+        const employee = await EmployeeModel.findById(userId);
+
+        if (!employee) {
+            return res.status(404).json({ msg: "User not found" });
+        }
+
+        // (Basically delete logic)
+        employee.cart = employee.cart.filter(item => 
+            item.productsId.toString() !== productId
+        );
+
+        await employee.save();
+        res.json({ msg: "Item Removed", cart: employee.cart });
+
+    } catch (err) {
+        console.error(err);
+        res.status(500).send("Server Error");
+    }
+});
+    
+ // Add Item to Cart Route 
+app.post('/api/cart/add', verifyUser, async (req, res) => {
+    try {
+        const { productId, quantity } = req.body; // Frontend se productId aayega
+        const userId = req.user.id; // Token se user ID milegi
+
+        const employee = await EmployeeModel.findById(userId);
+
+        if (!employee) {
+            return res.status(404).json({ msg: "User not found" });
+        }
+
+       const existingItemIndex = employee.cart.findIndex(item => 
+        item.productId && item.productId.toString() === productId
+);
+        if (existingItemIndex > -1) {
+            // Agar hai, to quantity badha do
+            employee.cart[existingItemIndex].quantity += 1;
+        } else {
+            // Agar nahi hai, to naya item push karo
+            employee.cart.push({ productId, quantity: 1 });
+        }
+
+        // Save karo database me
+        await employee.save();
+        res.json({ msg: "Item Added to Cart", cart: employee.cart });
+
+    } catch (err) {
+        console.error(err);
+        res.status(500).send("Server Error");
+    }
+});
+
 
 //  Get All Products
 app.get('/products', verifyUser, (req, res) => {

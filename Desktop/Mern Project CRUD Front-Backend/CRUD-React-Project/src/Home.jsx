@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom'; 
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom'; 
 import "bootstrap/dist/css/bootstrap.min.css"; 
@@ -16,74 +17,79 @@ function Home() {
 
     //   Security Check & Data Fetching 
     useEffect(() => {
-        //   Token Check Logic
         const token = localStorage.getItem("token");
         
         if (!token) {
-            // if token not have so pls send on login page
             navigate('/login');
         } else {
-            // Agar token hai, tabhi data mangwao
+            //  Products Mangwao
             axios.get('http://localhost:3001/products')
             .then(result => {
-                console.log("Data aa gaya:", result.data); 
                 setProducts(result.data); 
             })
             .catch(err => console.log(err));
-        }
-    }, [navigate]); 
 
+            axios.get('http://localhost:3001/api/cart', { withCredentials: true })
+            .then(res => {
+                if(Array.isArray(res.data)) {
+                    setCartCount(res.data.length); 
+                }
+            })
+            .catch(err => console.log("Cart Count Error:", err));
+        }
+    }, [navigate]);
     //   Logout Function
     const handleLogout = () => {
         localStorage.removeItem("token");
         localStorage.removeItem("userEmail"); 
-        // localStorage.removeItem("cart"); 
         
         navigate('/login'); 
     }
 
     // Add to Cart Logic
-    const addToCart = (product) => {
-        if (product.qty > 0) {
-            const existingCart = JSON.parse(localStorage.getItem("cart")) || [];
-            const existingItem = existingCart.find(item => item._id === product._id);
+    const addToCart = async (product) => {
+        const token = localStorage.getItem("token");
+        if(!token) {
+            alert("Please Login first to add items!");
+            navigate('/login');
+            return;
+        }
 
-            if (existingItem) {
-                existingItem.userQty += 1;
-            } else {
-                existingCart.push({ ...product, userQty: 1 });
+        try {
+            //  Server "Ye product database me save kar lo"
+            const res = await axios.post('http://localhost:3001/api/cart/add', 
+                { productId: product._id }, 
+                { withCredentials: true } 
+            );
+
+            if(res.status === 200) {
+                alert("Product Added to Cart! ✅");
+                // Cart ka number badha do taaki user ko dikhe
+                setCartCount(prev => prev + 1); 
             }
 
-            localStorage.setItem("cart", JSON.stringify(existingCart));
-            setCartCount(cartCount + 1);
-            alert(`${product.name} added to cart!`);
-
-            const updatedProducts = products.map(p => 
-                p._id === product._id ? { ...p, qty: p.qty - 1 } : p
-            );
-            setProducts(updatedProducts);
-
-        } else {
-            alert("Sorry! Product is Out of Stock");
+        } catch (err) {
+            console.error("Error adding to cart:", err);
+            alert("Error: Shayad Token expire ho gaya hai, Login again.");
         }
     };
-
     return (
         <div className="bg-light min-vh-100">
             
-            {/*  navbar */}
+            {/* navbar */}
             <nav className="navbar navbar-expand-lg navbar-dark bg-dark px-4">
                 <a className="navbar-brand" href="#">My Shop</a>
                 <div className="ms-auto d-flex align-items-center">
                     <span className="text-white me-3">Welcome, {userEmail.split('@')[0]}</span>
                     
-                    {/* Cart Button */}
-                    <button className="btn btn-primary position-relative">
+                
+                    <Link to="/cart" className="btn btn-primary position-relative">
                         Cart 🛒
                         <span className="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger">
                         {cartCount}  
                         </span>
-                    </button>
+                    </Link>
+                    {/*  */}
                     
                     {/* Logout Button */}
                     <button onClick={handleLogout} className="btn btn-outline-light ms-3">
@@ -92,7 +98,7 @@ function Home() {
                 </div>
             </nav>
 
-            {/*  main content */}
+            {/* main content */}
             <div className="container-fluid mt-4">
                 <div className="row">
                     

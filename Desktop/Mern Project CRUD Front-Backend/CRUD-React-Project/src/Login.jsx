@@ -17,7 +17,7 @@ function Login() {
                 // if password is correct send on  Home page.
                 if(result.data.token){
                     localStorage.setItem("token", result.data.token);
-                }
+                 }
                 localStorage.setItem("userEmail", email);
                 navigate('/home');
             } else {

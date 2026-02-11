@@ -1,101 +1,139 @@
-import  { useState,useEffect} from 'react';
+import React, { useEffect, useState } from 'react';
+import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
-import "bootstrap/dist/css/bootstrap.min.css";
 
 function Cart() {
-    const navigate = useNavigate();
+    //  STATE VARIABLES
+    const [cart, setCart] = useState([]); 
+    const [loading, setLoading] = useState(true);
+    const navigate = useNavigate(); 
 
-    // 1. Default value empty array
-    const [cartItems, setCartItems] = useState([]);
-
+    //  DATA FETCHING 
     useEffect(() => {
-        try {
-            const storedData = localStorage.getItem("cart");
-            if (storedData) {
-                const parsedData = JSON.parse(storedData);
-
-                // Check kiya ki kya ye sach me Array hai?
-                if (Array.isArray(parsedData)) {
-                    setCartItems(parsedData);
-                } else {
-                    console.log("Data kharab tha, empty list set ki");
-                    setCartItems([]); 
-                }
+        axios.get('http://localhost:3001/api/cart', {
+            withCredentials: true  //Token 
+        })
+        .then(res => {
+            if (Array.isArray(res.data)) {
+                setCart(res.data); 
+            } else {
+                navigate('/login');
             }
-        } catch (error) {
-            // 2. Catch block ab sahi chalega
-            console.log("Cart Error:", error);
-            setCartItems([]);
+            setLoading(false); 
+        })
+        .catch(err => {
+            console.log("Error fetching cart:", err);
+            setLoading(false); // Error aaya tab bhi loading band karo
+        });
+    }, [navigate]);
+
+    //  REMOVE ITEM LOGIC 
+    const removeFromCart = async (productId) => {
+        if(!window.confirm("Are you sure you want to remove this item?")) return;
+        try {
+            
+            const res = await axios.delete(`http://localhost:3001/api/cart/${productId}`, {
+                withCredentials: true
+            });
+
+            if(res.status === 200) {
+                alert("Item Removed! 🗑️");
+                setCart(cart.filter(item => item.productsId._id !== productId));
+            }
+        } catch (err) {
+            console.error("Error removing item:", err);
+            alert("Error deleting item");
         }
-    }, []); 
-
-    // --- BAKI CODE WAISA HI RAHEGA ---
-    // (Lekin main pura de raha hun taaki copy-paste me galti na ho)
-
-    const handleRemove = (id) => {
-        const updatedCart = cartItems.filter(item => item._id !== id);
-        setCartItems(updatedCart);
-        localStorage.setItem("cart", JSON.stringify(updatedCart)); 
     };
 
-    const totalPrice = cartItems.reduce((acc, item) => {
-        return acc + (Number(item.price) * Number(item.userQty) || 0);
-    }, 0);
+    //  CALCULATION LOGIC 
+    
+    const totalPrice = cart.reduce((acc, item) => {
+        const price = item.productsId?.price || 0;
+        
+        return acc + (price * item.quantity);
+    }, 0); // 0 se ginti shuru hogi
 
+    // LOADING UI
+    if(loading) return <h2 className="text-center mt-5">Loading...</h2>;
+
+    //  MAIN UI RENDER 
     return (
-        <div className="container mt-5">
-            <h2 className="mb-4">Your Shopping Cart 🛒</h2>
+        <div className="container mt-5 mb-5">
+            <h2 className="mb-4">My Shopping Cart</h2>
             
-            {cartItems.length === 0 ? (
-                <div className="text-center p-5 border bg-light">
-                    <h4>Your Cart is Empty!</h4>
-                    <button className="btn btn-primary mt-3" onClick={() => navigate('/home')}>
-                        Go to Shop
-                    </button>
-                </div>
+            {/*  Agar Cart khali hai to message , nahi to List show hoga*/}
+            {cart.length === 0 ? (
+                <div className="alert alert-warning">Cart is Empty 🛒</div>
             ) : (
-                <div className="row">
-                    <div className="col-md-8">
-                        {cartItems.map(item => (
-                            <div className="card mb-3 shadow-sm" key={item._id}>
-                                <div className="row g-0 align-items-center">
-                                    <div className="col-md-2 p-2">
-                                        <img 
-                                            src={item.image || "https://via.placeholder.com/150"} 
-                                            className="img-fluid rounded-start" 
-                                            alt={item.name} 
-                                            style={{maxHeight: "100px", objectFit: "contain"}}
-                                        />
-                                    </div>
-                                    <div className="col-md-6">
-                                        <div className="card-body">
-                                            <h5 className="card-title">{item.name}</h5>
-                                            <p className="card-text">Price: <strong>₹{item.price}</strong></p>
+                <>
+                    {/* CART ITEMS LIST  */}
+                    <div className="row">
+                        {/* Map Loop: Har item ke liye ek Card banega */}
+                        {cart.map((item, index) => (
+                            <div key={index} className="col-12 mb-3">
+                                <div className="card shadow-sm p-3">
+                                    <div className="row align-items-center">
+                                        
+                                        {/* Product Image */}
+                                        <div className="col-md-2">
+                                            <img 
+                                                // Optional Chaining (?.) taaki agar image na ho to crash na ho
+                                                src={`http://localhost:3001/images/${item.productsId?.image}`} 
+                                                alt={item.productsId?.name} 
+                                                className="img-fluid rounded"
+                                                style={{height: "80px", objectFit: "cover"}}
+                                            />
                                         </div>
-                                    </div>
-                                    <div className="col-md-2 text-center">
-                                        <span className="badge bg-secondary p-2">Qty: {item.userQty}</span>
-                                    </div>
-                                    <div className="col-md-2 text-center">
-                                        <button className="btn btn-danger btn-sm" onClick={() => handleRemove(item._id)}>Remove</button>
+                                        
+                                        {/* Product Name & Description */}
+                                        <div className="col-md-4">
+                                            <h5>{item.productsId?.name}</h5>
+                                            <p className="text-muted small">{item.productsId?.desc}</p>
+                                        </div>
+
+                                        {/* Price & Quantity Info */}
+                                        <div className="col-md-3">
+                                            <h6>Price: ₹{item.productsId?.price}</h6>
+                                            <p>Qty: {item.quantity}</p>
+                                        </div>
+
+                                        {/* Single Item Total (Price * Qty) */}
+                                        <div className="col-md-3 text-end">
+                                            <h5>₹{item.productsId?.price * item.quantity}</h5>
+
+                                            {/*  Remove button */}
+                                            <button 
+                                                className="btn btn-danger btn-sm mt-2"
+                                                onClick={() => removeFromCart(item.productsId._id)}
+                                            >
+                                                Remove 🗑️
+                                            </button>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
                         ))}
                     </div>
 
-                    <div className="col-md-4">
-                        <div className="card shadow-sm">
-                            <div className="card-header bg-dark text-white">
-                                <h5>Summary</h5>
-                            </div>
-                            <div className="card-body">
-                                <h4>Total: <span className="text-success">₹{totalPrice}</span></h4>
-                                <button className="btn btn-success w-100 mt-3">Checkout</button>
+                    {/* Grand total  */}
+                    <div className="row mt-4">
+                        <div className="col-md-6 offset-md-6"> {/* Right side shift karne ke liye */}
+                            <div className="card p-4 border-0 shadow bg-light">
+                                <div className="d-flex justify-content-between align-items-center mb-3">
+                                    <h4>Grand Total:</h4>
+                                    <h2 className="text-success fw-bold">
+                                        {/* toLocaleString():  (e.g. 1,200) */}
+                                        ₹{totalPrice.toLocaleString('en-IN')}
+                                    </h2>
+                                </div>
+                                <button className="btn btn-dark btn-lg w-100">
+                                    Proceed to Checkout
+                                </button>
                             </div>
                         </div>
                     </div>
-                </div>
+                </>
             )}
         </div>
     );
